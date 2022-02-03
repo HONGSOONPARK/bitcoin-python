@@ -6,8 +6,8 @@ from urllib.parse import urlencode
 
 import requests
 
-access_key = ''
-secret_key = ''
+access_key = 'XcLybkG9nsdxEUuXVHxGlKUPrxHMM1KqCYowKxBA'
+secret_key = 'IhAW3eq8KD8pmgRCIMqdtSNFkOhSJK2RLil0BmgF'
 server_url = 'https://api.upbit.com'
 
 payload = {
