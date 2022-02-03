@@ -13,17 +13,13 @@ moai_token = '5272244147:AAHpcSWzIapXCNlm7yxW7Xvqs2hLRhU5UGs'
 # 머리돌 채널 ID  : -1001280712219
 stonehead_channel = '-1001280712219'
 
-telgm_bot = telegram.Bot(token = moai_token)
+# 모아이 채널 ID : -1001318811692
 
-updates = telgm_bot.getUpdates()
-print(updates[0].mesage.chat_id)
-
-
-
-# Today (Ex:20210228)
-today = datetime.today().strftime("%Y%m%d")
-todayTime = datetime.today().strftime("%Y%m%d%H%M%S")
+telgm_bot = telegram.Bot(token=moai_token)
 
 # 텔레그램 채널에 메세지 보내기
+
+
 def telgm_channel_send_msg(channel, msg):
-    telgm_bot.sendMessage(chat_id = channel, text=msg)
+    print('send msg')
+    telgm_bot.sendMessage(chat_id=channel, text=msg)
