@@ -6,8 +6,8 @@ from urllib.parse import urlencode
 
 import requests
 
-access_key = 'XcLybkG9nsdxEUuXVHxGlKUPrxHMM1KqCYowKxBA'
-secret_key = 'IhAW3eq8KD8pmgRCIMqdtSNFkOhSJK2RLil0BmgF'
+access_key = ''
+secret_key = ''
 server_url = 'https://api.upbit.com'
 
 payload = {
@@ -19,6 +19,6 @@ jwt_token = jwt.encode(payload, secret_key)
 authorize_token = 'Bearer {}'.format(jwt_token)
 headers = {"Authorization": authorize_token}
 
-res = requests.get(server_url + "/v1/accounts", headers=headers)
+res = requests.get(server_url + "/v1/api_keys", headers=headers)
 
 print(res.json())

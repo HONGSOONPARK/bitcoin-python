@@ -1,4 +1,4 @@
-# from module import telegram_bot
+from module import telegram_bot
 from module import commons
 # from module import upbit
 
@@ -13,12 +13,25 @@ import logging
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
     try:
-        print('test')
         commons.set_loglevel('D')
         # raise Exception('test 케케 ')
 
-        item_list = commons.get_items('KRW', '')
-        logging.debug(item_list)
+        # item_list = commons.get_items('KRW', '')
+
+        # cur_balance = commons.get_balance('KRW-XEC')
+
+        # get_accounts = commons.get_accounts('Y', 'KRW-XEC')
+
+        # print(get_accounts)
+
+        krw_balance = commons.get_candle('KRW-XEC', '3', 10)
+        print(krw_balance)
+
+        # for data_for in item_list:
+        #     print(data_for['market'].split('-')[1], data_for['korean_name'])
+
+        # logging.debug(item_list)
+        # telegram_bot.telgm_channel_send_msg('-1001318811692', item_list)
 
     except KeyboardInterrupt as e:
         print('KeyboardInterrupt Exception.', e)
