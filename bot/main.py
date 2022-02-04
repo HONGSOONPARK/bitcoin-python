@@ -1,30 +1,31 @@
-from module import telegram_bot
-
-import sys
-import logging
-import traceback
+# from module import telegram_bot
+from module import commons
 # from module import upbit
 
+import sys
+import traceback
+import logging
 
-import telegram
-
-
-# 모아이  ID : -1001318811692
-moai_chat_id = '-1001318811692'
 
 # -----------------------------------------------------------------------------
 # - Name : main
-# - Desc : 메인
+# - Desc : 메인, 프로그램 시작점
 # -----------------------------------------------------------------------------
 if __name__ == '__main__':
-
-    telegram_bot.telgm_channel_send_msg(moai_chat_id, 'testtt')
-
     try:
         print('test')
+        commons.set_loglevel('D')
+        # raise Exception('test 케케 ')
 
-    except KeyboardInterrupt:
-        print('KeyboardInterrupt Exception')
+        item_list = commons.get_items('KRW', '')
+        logging.debug(item_list)
 
-    except Exception:
-        print('Exception')
+    except KeyboardInterrupt as e:
+        print('KeyboardInterrupt Exception.', e)
+        logging.error(traceback.format_exc())
+        sys.exit(1)
+
+    except Exception as e:
+        print('Exception.', e)
+        logging.error(traceback.format_exc())
+        sys.exit(1)
