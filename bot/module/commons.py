@@ -11,13 +11,23 @@ import math
 from urllib.parse import urlencode
 from decimal import Decimal
 
+import smtplib
+import sys
+import numpy
+import pandas as pd
+from datetime import datetime, timedelta
 
-from module import telegram_bot
+
+# from module import telegram_bot
 
 # keys
-access_key = ''
-secret_key = ''
-server_url = 'https://api.upbit.com'
+access_key = ""
+secret_key = ""
+server_url = "https://api.upbit.com"
+
+# 상수 설정(최소 주문 금액)
+min_order_amt = 5000
+
 
 # -----------------------------------------------------------------------------
 # - Name : set_loglevel
@@ -39,22 +49,22 @@ def set_loglevel(level):
         # ---------------------------------------------------------------------
         if level.upper() == "D":
             logging.basicConfig(
-                format='[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d]:%(message)s',
-                datefmt='%Y/%m/%d %I:%M:%S %p',
-                level=logging.DEBUG
+                format="[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d]:%(message)s",
+                datefmt="%Y/%m/%d %I:%M:%S %p",
+                level=logging.DEBUG,
             )
-            logging.info('::::::: set log level :: DEBUG')
+            logging.info("::::::: set log level :: DEBUG")
         # ---------------------------------------------------------------------
         # 로그레벨 : ERROR
         # ---------------------------------------------------------------------
         elif level.upper() == "E":
             logging.basicConfig(
-                format='[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d]:%(message)s',
-                datefmt='%Y/%m/%d %I:%M:%S %p',
-                level=logging.ERROR
+                format="[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d]:%(message)s",
+                datefmt="%Y/%m/%d %I:%M:%S %p",
+                level=logging.ERROR,
             )
 
-            logging.info('::::::: set log level :: ERROR')
+            logging.info("::::::: set log level :: ERROR")
         # ---------------------------------------------------------------------
         # 로그레벨 : INFO
         # ---------------------------------------------------------------------
@@ -64,12 +74,12 @@ def set_loglevel(level):
             # 로그레벨(DEBUG, INFO, WARNING, ERROR, CRITICAL)
             # -----------------------------------------------------------------------------
             logging.basicConfig(
-                format='[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d]:%(message)s',
-                datefmt='%Y/%m/%d %I:%M:%S %p',
-                level=logging.INFO
+                format="[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d]:%(message)s",
+                datefmt="%Y/%m/%d %I:%M:%S %p",
+                level=logging.INFO,
             )
 
-            logging.info('::::::: set log level :: INFO')
+            logging.info("::::::: set log level :: INFO")
 
     # ----------------------------------------
     # Exception Raise
@@ -100,16 +110,18 @@ def send_request(reqType, reqUrl, reqParam, reqHeader):
 
             # 요청 처리
             response = requests.request(
-                reqType, reqUrl, params=reqParam, headers=reqHeader)
+                reqType, reqUrl, params=reqParam, headers=reqHeader
+            )
 
             # 요청 가능회수 추출
-            if 'Remaining-Req' in response.headers:
+            if "Remaining-Req" in response.headers:
 
-                hearder_info = response.headers['Remaining-Req']
+                hearder_info = response.headers["Remaining-Req"]
                 start_idx = hearder_info.find("sec=")
                 end_idx = len(hearder_info)
-                remain_sec = hearder_info[int(start_idx):int(
-                    end_idx)].replace('sec=', '')
+                remain_sec = hearder_info[int(start_idx) : int(end_idx)].replace(
+                    "sec=", ""
+                )
             else:
                 logging.error("헤더 정보 이상")
                 logging.error(response.headers)
@@ -161,37 +173,41 @@ def get_items(market, except_item):
         rtn_list = []
 
         # 텔레그램 메세지 리턴용
-        telegram_bot_msg = ''
+        telegram_bot_msg = ""
 
         # 마켓 데이터
-        markets = market.split(',')
+        markets = market.split(",")
 
         # 제외 데이터
-        except_items = except_item.split(',')
+        except_items = except_item.split(",")
 
         url = "https://api.upbit.com/v1/market/all"
         querystring = {"isDetails": "false"}
         response = send_request("GET", url, querystring, "")
         data = response.json()
 
-        logging.debug(data)
+        # logging.debug(data)
 
         # 조회 마켓만 추출
         for data_for in data:
             for market_for in markets:
-                if data_for['market'].split('-')[0] == market_for:
+                if data_for["market"].split("-")[0] == market_for:
                     rtn_list.append(data_for)
 
         # 제외 종목 제거
         for rtnlist_for in rtn_list[:]:
             for exceptItemFor in except_items:
                 for marketFor in markets:
-                    if rtnlist_for['market'] == marketFor + '-' + exceptItemFor:
+                    if rtnlist_for["market"] == marketFor + "-" + exceptItemFor:
                         rtn_list.remove(rtnlist_for)
 
         for rebuild_data in rtn_list:
-            telegram_bot_msg += rebuild_data['korean_name'] + \
-                '('+rebuild_data['market'].split('-')[1]+')\n'
+            telegram_bot_msg += (
+                rebuild_data["korean_name"]
+                + "("
+                + rebuild_data["market"].split("-")[1]
+                + ")\n"
+            )
 
         # telegram_bot.moaihead_channel_send_msg(telegram_bot_msg)
 
@@ -217,10 +233,10 @@ def buycoin_mp(target_item, buy_amount):
     try:
 
         query = {
-            'market': target_item,
-            'side': 'bid',
-            'price': buy_amount,
-            'ord_type': 'price',
+            "market": target_item,
+            "side": "bid",
+            "price": buy_amount,
+            "ord_type": "price",
         }
 
         query_string = urlencode(query).encode()
@@ -230,14 +246,14 @@ def buycoin_mp(target_item, buy_amount):
         query_hash = m.hexdigest()
 
         payload = {
-            'access_key': access_key,
-            'nonce': str(uuid.uuid4()),
-            'query_hash': query_hash,
-            'query_hash_alg': 'SHA512',
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
+            "query_hash": query_hash,
+            "query_hash_alg": "SHA512",
         }
 
         jwt_token = jwt.encode(payload, secret_key)
-        authorize_token = 'Bearer {}'.format(jwt_token)
+        authorize_token = "Bearer {}".format(jwt_token)
         headers = {"Authorization": authorize_token}
 
         res = send_request("POST", server_url + "/v1/orders", query, headers)
@@ -253,6 +269,34 @@ def buycoin_mp(target_item, buy_amount):
 
     # ----------------------------------------
     # Exception Raise
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_ticker
+# - Desc : 현재가 조회
+# - Input
+#   1) target_itemlist : 대상 종목(콤마 구분자)
+# - Output
+#   2) 현재가 데이터
+# -----------------------------------------------------------------------------
+
+
+def get_ticker(target_itemlist):
+    try:
+
+        url = "https://api.upbit.com/v1/ticker"
+
+        querystring = {"markets": target_itemlist}
+        response = send_request("GET", url, querystring, "")
+        rtn_data = response.json()
+
+        return rtn_data
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
     # ----------------------------------------
     except Exception:
         raise
@@ -276,12 +320,12 @@ def get_balance(target_item):
         max_cnt = 0
 
         payload = {
-            'access_key': access_key,
-            'nonce': str(uuid.uuid4()),
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
         }
 
         jwt_token = jwt.encode(payload, secret_key)
-        authorize_token = 'Bearer {}'.format(jwt_token)
+        authorize_token = "Bearer {}".format(jwt_token)
         headers = {"Authorization": authorize_token}
 
         # 잔고가 조회 될 때까지 반복
@@ -296,8 +340,8 @@ def get_balance(target_item):
             # 해당 종목에 대한 잔고 조회
             # 잔고는 마켓에 상관없이 전체 잔고가 조회됨
             for myasset_for in my_asset:
-                if myasset_for['currency'] == target_item.split('-')[1]:
-                    rtn_balance = myasset_for['balance']
+                if myasset_for["currency"] == target_item.split("-")[1]:
+                    rtn_balance = myasset_for["balance"]
 
             # 잔고가 0 이상일때까지 반복
             if Decimal(str(rtn_balance)) > Decimal(str(0)):
@@ -334,10 +378,10 @@ def sellcoin_mp(target_item):
         cur_balance = get_balance(target_item)
 
         query = {
-            'market': target_item,
-            'side': 'ask',
-            'volume': cur_balance,
-            'ord_type': 'market',
+            "market": target_item,
+            "side": "ask",
+            "volume": cur_balance,
+            "ord_type": "market",
         }
 
         query_string = urlencode(query).encode()
@@ -347,14 +391,14 @@ def sellcoin_mp(target_item):
         query_hash = m.hexdigest()
 
         payload = {
-            'access_key': access_key,
-            'nonce': str(uuid.uuid4()),
-            'query_hash': query_hash,
-            'query_hash_alg': 'SHA512',
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
+            "query_hash": query_hash,
+            "query_hash_alg": "SHA512",
         }
 
         jwt_token = jwt.encode(payload, secret_key)
-        authorize_token = 'Bearer {}'.format(jwt_token)
+        authorize_token = "Bearer {}".format(jwt_token)
         headers = {"Authorization": authorize_token}
 
         res = send_request("POST", server_url + "/v1/orders", query, headers)
@@ -391,11 +435,11 @@ def sellcoin_tg(target_item, sell_price):
         cur_balance = get_balance(target_item)
 
         query = {
-            'market': target_item,
-            'side': 'ask',
-            'volume': cur_balance,
-            'price': sell_price,
-            'ord_type': 'limit',
+            "market": target_item,
+            "side": "ask",
+            "volume": cur_balance,
+            "price": sell_price,
+            "ord_type": "limit",
         }
 
         query_string = urlencode(query).encode()
@@ -405,14 +449,14 @@ def sellcoin_tg(target_item, sell_price):
         query_hash = m.hexdigest()
 
         payload = {
-            'access_key': access_key,
-            'nonce': str(uuid.uuid4()),
-            'query_hash': query_hash,
-            'query_hash_alg': 'SHA512',
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
+            "query_hash": query_hash,
+            "query_hash_alg": "SHA512",
         }
 
         jwt_token = jwt.encode(payload, secret_key)
-        authorize_token = 'Bearer {}'.format(jwt_token)
+        authorize_token = "Bearer {}".format(jwt_token)
         headers = {"Authorization": authorize_token}
 
         res = send_request("POST", server_url + "/v1/orders", query, headers)
@@ -496,11 +540,9 @@ def get_targetprice(cal_type, st_price, chg_val):
                 hoga_val = get_hoga(rtn_price)
 
                 if Decimal(str(chg_val)) > 0:
-                    rtn_price = Decimal(str(rtn_price)) + \
-                        Decimal(str(hoga_val))
+                    rtn_price = Decimal(str(rtn_price)) + Decimal(str(hoga_val))
                 elif Decimal(str(chg_val)) < 0:
-                    rtn_price = Decimal(str(rtn_price)) - \
-                        Decimal(str(hoga_val))
+                    rtn_price = Decimal(str(rtn_price)) - Decimal(str(hoga_val))
                 else:
                     break
 
@@ -513,21 +555,21 @@ def get_targetprice(cal_type, st_price, chg_val):
                 hoga_val = get_hoga(st_price)
 
                 if Decimal(str(chg_val)) > 0:
-                    rtn_price = Decimal(str(rtn_price)) + \
-                        Decimal(str(hoga_val))
+                    rtn_price = Decimal(str(rtn_price)) + Decimal(str(hoga_val))
                 elif Decimal(str(chg_val)) < 0:
-                    rtn_price = Decimal(str(rtn_price)) - \
-                        Decimal(str(hoga_val))
+                    rtn_price = Decimal(str(rtn_price)) - Decimal(str(hoga_val))
                 else:
                     break
 
                 if Decimal(str(chg_val)) > 0:
                     if Decimal(str(rtn_price)) >= Decimal(str(st_price)) * (
-                            Decimal(str(1)) + (Decimal(str(chg_val))) / Decimal(str(100))):
+                        Decimal(str(1)) + (Decimal(str(chg_val))) / Decimal(str(100))
+                    ):
                         break
                 elif Decimal(str(chg_val)) < 0:
                     if Decimal(str(rtn_price)) <= Decimal(str(st_price)) * (
-                            Decimal(str(1)) + (Decimal(str(chg_val))) / Decimal(str(100))):
+                        Decimal(str(1)) + (Decimal(str(chg_val))) / Decimal(str(100))
+                    ):
                         break
 
         return rtn_price
@@ -558,12 +600,12 @@ def get_accounts(except_yn, market_code):
         min_price = 5000
 
         payload = {
-            'access_key': access_key,
-            'nonce': str(uuid.uuid4()),
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
         }
 
         jwt_token = jwt.encode(payload, secret_key)
-        authorize_token = 'Bearer {}'.format(jwt_token)
+        authorize_token = "Bearer {}".format(jwt_token)
         headers = {"Authorization": authorize_token}
 
         res = send_request("GET", server_url + "/v1/accounts", "", headers)
@@ -573,18 +615,37 @@ def get_accounts(except_yn, market_code):
 
             # KRW 및 소액 제외
             if except_yn == "Y" or except_yn == "y":
-                if account_data_for['currency'] != "KRW" and Decimal(str(account_data_for['avg_buy_price'])) * (Decimal(str(account_data_for['balance'])) + Decimal(str(account_data_for['locked']))) >= Decimal(str(min_price)):
+                if account_data_for["currency"] != "KRW" and Decimal(
+                    str(account_data_for["avg_buy_price"])
+                ) * (
+                    Decimal(str(account_data_for["balance"]))
+                    + Decimal(str(account_data_for["locked"]))
+                ) >= Decimal(
+                    str(min_price)
+                ):
                     rtn_data.append(
-                        {'market': market_code + '-' + account_data_for['currency'], 'balance': account_data_for['balance'],
-                         'locked': account_data_for['locked'],
-                         'avg_buy_price': account_data_for['avg_buy_price'],
-                         'avg_buy_price_modified': account_data_for['avg_buy_price_modified']})
+                        {
+                            "market": market_code + "-" + account_data_for["currency"],
+                            "balance": account_data_for["balance"],
+                            "locked": account_data_for["locked"],
+                            "avg_buy_price": account_data_for["avg_buy_price"],
+                            "avg_buy_price_modified": account_data_for[
+                                "avg_buy_price_modified"
+                            ],
+                        }
+                    )
             else:
                 rtn_data.append(
-                    {'market': market_code + '-' + account_data_for['currency'], 'balance': account_data_for['balance'],
-                     'locked': account_data_for['locked'],
-                     'avg_buy_price': account_data_for['avg_buy_price'],
-                     'avg_buy_price_modified': account_data_for['avg_buy_price_modified']})
+                    {
+                        "market": market_code + "-" + account_data_for["currency"],
+                        "balance": account_data_for["balance"],
+                        "locked": account_data_for["locked"],
+                        "avg_buy_price": account_data_for["avg_buy_price"],
+                        "avg_buy_price_modified": account_data_for[
+                            "avg_buy_price_modified"
+                        ],
+                    }
+                )
 
         return rtn_data
 
@@ -615,12 +676,12 @@ def get_krwbal():
         fee_rate = 0.05
 
         payload = {
-            'access_key': access_key,
-            'nonce': str(uuid.uuid4()),
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
         }
 
         jwt_token = jwt.encode(payload, secret_key)
-        authorize_token = 'Bearer {}'.format(jwt_token)
+        authorize_token = "Bearer {}".format(jwt_token)
         headers = {"Authorization": authorize_token}
 
         res = send_request("GET", server_url + "/v1/accounts", "", headers)
@@ -628,18 +689,18 @@ def get_krwbal():
         data = res.json()
 
         for dataFor in data:
-            if (dataFor['currency']) == "KRW":
-                krw_balance = math.floor(Decimal(str(dataFor['balance'])))
+            if (dataFor["currency"]) == "KRW":
+                krw_balance = math.floor(Decimal(str(dataFor["balance"])))
 
         # 잔고가 있는 경우만
         if Decimal(str(krw_balance)) > Decimal(str(0)):
             # 수수료
-            fee = math.ceil(Decimal(str(krw_balance)) *
-                            (Decimal(str(fee_rate)) / Decimal(str(100))))
+            fee = math.ceil(
+                Decimal(str(krw_balance)) * (Decimal(str(fee_rate)) / Decimal(str(100)))
+            )
 
             # 매수가능금액
-            available_krw = math.floor(
-                Decimal(str(krw_balance)) - Decimal(str(fee)))
+            available_krw = math.floor(Decimal(str(krw_balance)) - Decimal(str(fee)))
 
         else:
             # 수수료
@@ -649,9 +710,9 @@ def get_krwbal():
             available_krw = 0
 
         # 결과 조립
-        rtn_balance['krw_balance'] = krw_balance
-        rtn_balance['fee'] = fee
-        rtn_balance['available_krw'] = available_krw
+        rtn_balance["krw_balance"] = krw_balance
+        rtn_balance["fee"] = fee
+        rtn_balance["available_krw"] = available_krw
 
         return rtn_balance
 
@@ -673,8 +734,8 @@ def get_krwbal():
 def get_order(target_item):
     try:
         query = {
-            'market': target_item,
-            'state': 'wait',
+            "market": target_item,
+            "state": "wait",
         }
 
         query_string = urlencode(query).encode()
@@ -684,14 +745,14 @@ def get_order(target_item):
         query_hash = m.hexdigest()
 
         payload = {
-            'access_key': access_key,
-            'nonce': str(uuid.uuid4()),
-            'query_hash': query_hash,
-            'query_hash_alg': 'SHA512',
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
+            "query_hash": query_hash,
+            "query_hash_alg": "SHA512",
         }
 
         jwt_token = jwt.encode(payload, secret_key)
-        authorize_token = 'Bearer {}'.format(jwt_token)
+        authorize_token = "Bearer {}".format(jwt_token)
         headers = {"Authorization": authorize_token}
 
         res = send_request("GET", server_url + "/v1/orders", query, headers)
@@ -718,7 +779,7 @@ def cancel_order_uuid(order_uuid):
     try:
 
         query = {
-            'uuid': order_uuid,
+            "uuid": order_uuid,
         }
 
         query_string = urlencode(query).encode()
@@ -728,14 +789,14 @@ def cancel_order_uuid(order_uuid):
         query_hash = m.hexdigest()
 
         payload = {
-            'access_key': access_key,
-            'nonce': str(uuid.uuid4()),
-            'query_hash': query_hash,
-            'query_hash_alg': 'SHA512',
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
+            "query_hash": query_hash,
+            "query_hash_alg": "SHA512",
         }
 
         jwt_token = jwt.encode(payload, secret_key)
-        authorize_token = 'Bearer {}'.format(jwt_token)
+        authorize_token = "Bearer {}".format(jwt_token)
         headers = {"Authorization": authorize_token}
 
         res = send_request("DELETE", server_url + "/v1/order", query, headers)
@@ -768,10 +829,10 @@ def cancel_order(target_item, side):
         for order_data_for in order_data:
 
             if side == "BUY" or side == "buy":
-                if order_data_for['side'] == "ask":
+                if order_data_for["side"] == "ask":
                     order_data.remove(order_data_for)
             elif side == "SELL" or side == "sell":
-                if order_data_for['side'] == "bid":
+                if order_data_for["side"] == "bid":
                     order_data.remove(order_data_for)
 
         # 미체결 주문이 있으면
@@ -779,7 +840,7 @@ def cancel_order(target_item, side):
 
             # 미체결 주문내역 전체 취소
             for order_data_for in order_data:
-                cancel_order_uuid(order_data_for['uuid'])
+                cancel_order_uuid(order_data_for["uuid"])
 
     # ----------------------------------------
     # 모든 함수의 공통 부분(Exception 처리)
@@ -805,11 +866,11 @@ def buycoin_tg(target_item, buy_amount, buy_price):
         vol = Decimal(str(buy_amount)) / Decimal(str(buy_price))
 
         query = {
-            'market': target_item,
-            'side': 'bid',
-            'volume': vol,
-            'price': buy_price,
-            'ord_type': 'limit',
+            "market": target_item,
+            "side": "bid",
+            "volume": vol,
+            "price": buy_price,
+            "ord_type": "limit",
         }
 
         query_string = urlencode(query).encode()
@@ -819,14 +880,14 @@ def buycoin_tg(target_item, buy_amount, buy_price):
         query_hash = m.hexdigest()
 
         payload = {
-            'access_key': access_key,
-            'nonce': str(uuid.uuid4()),
-            'query_hash': query_hash,
-            'query_hash_alg': 'SHA512',
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
+            "query_hash": query_hash,
+            "query_hash_alg": "SHA512",
         }
 
         jwt_token = jwt.encode(payload, secret_key)
-        authorize_token = 'Bearer {}'.format(jwt_token)
+        authorize_token = "Bearer {}".format(jwt_token)
         headers = {"Authorization": authorize_token}
 
         res = send_request("POST", server_url + "/v1/orders", query, headers)
@@ -864,7 +925,16 @@ def get_candle(target_item, tick_kind, inq_range):
         # Tick 별 호출 URL 설정
         # ----------------------------------------
         # 분붕
-        if tick_kind == "1" or tick_kind == "3" or tick_kind == "5" or tick_kind == "10" or tick_kind == "15" or tick_kind == "30" or tick_kind == "60" or tick_kind == "240":
+        if (
+            tick_kind == "1"
+            or tick_kind == "3"
+            or tick_kind == "5"
+            or tick_kind == "10"
+            or tick_kind == "15"
+            or tick_kind == "30"
+            or tick_kind == "60"
+            or tick_kind == "240"
+        ):
             target_url = "minutes/" + tick_kind
         # 일봉
         elif tick_kind == "D":
@@ -885,16 +955,917 @@ def get_candle(target_item, tick_kind, inq_range):
         # Tick 조회
         # ----------------------------------------
         querystring = {"market": target_item, "count": inq_range}
-        res = send_request("GET", server_url +
-                           "/v1/candles/" + target_url, querystring, "")
+        res = send_request(
+            "GET", server_url + "/v1/candles/" + target_url, querystring, ""
+        )
         candle_data = res.json()
 
-        logging.debug(candle_data)
+        # logging.debug(candle_data)
 
         return candle_data
 
     # ----------------------------------------
     # Exception Raise
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_rsi
+# - Desc : RSI 조회
+# - Input
+#   1) target_item : 대상 종목
+#   2) tick_kind : 캔들 종류 (1, 3, 5, 10, 15, 30, 60, 240 - 분, D-일, W-주, M-월)
+#   3) inq_range : 조회 범위
+# - Output
+#   1) RSI 값
+# -----------------------------------------------------------------------------
+def get_rsi(target_item, tick_kind, inq_range):
+    try:
+
+        # 캔들 추출
+        candle_data = get_candle(target_item, tick_kind, inq_range)
+
+        df = pd.DataFrame(candle_data)
+        df = df.reindex(index=df.index[::-1]).reset_index()
+
+        df["close"] = df["trade_price"]
+
+        # RSI 계산
+        def rsi(ohlc: pd.DataFrame, period: int = 14):
+            ohlc["close"] = ohlc["close"]
+            delta = ohlc["close"].diff()
+
+            up, down = delta.copy(), delta.copy()
+            up[up < 0] = 0
+            down[down > 0] = 0
+
+            _gain = up.ewm(com=(period - 1), min_periods=period).mean()
+            _loss = down.abs().ewm(com=(period - 1), min_periods=period).mean()
+
+            RS = _gain / _loss
+            return pd.Series(100 - (100 / (1 + RS)), name="RSI")
+
+        rsi = round(rsi(df, 14).iloc[-1], 4)
+
+        return rsi
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_mfi
+# - Desc : MFI 조회
+# - Input
+#   1) target_item : 대상 종목
+#   2) tick_kind : 캔들 종류 (1, 3, 5, 10, 15, 30, 60, 240 - 분, D-일, W-주, M-월)
+#   3) inq_range : 캔들 조회 범위
+#   4) loop_cnt : 지표 반복계산 횟수
+# - Output
+#   1) MFI 값
+# -----------------------------------------------------------------------------
+def get_mfi(target_item, tick_kind, inq_range, loop_cnt):
+    try:
+
+        # 캔들 데이터 조회용
+        candle_datas = []
+
+        # MFI 데이터 리턴용
+        mfiList = []
+
+        # 캔들 추출
+        candle_data = get_candle(target_item, tick_kind, inq_range)
+
+        # 조회 횟수별 candle 데이터 조합
+        for i in range(0, int(loop_cnt)):
+            candle_datas.append(candle_data[i : int(len(candle_data))])
+
+        # 캔들 데이터만큼 수행
+        for candle_data_for in candle_datas:
+
+            df = pd.DataFrame(candle_data_for)
+            dfDt = df["candle_date_time_kst"].iloc[::-1]
+
+            df["typical_price"] = (
+                df["trade_price"] + df["high_price"] + df["low_price"]
+            ) / 3
+            df["money_flow"] = df["typical_price"] * df["candle_acc_trade_volume"]
+
+            positive_mf = 0
+            negative_mf = 0
+
+            for i in range(0, 14):
+
+                if df["typical_price"][i] > df["typical_price"][i + 1]:
+                    positive_mf = positive_mf + df["money_flow"][i]
+                elif df["typical_price"][i] < df["typical_price"][i + 1]:
+                    negative_mf = negative_mf + df["money_flow"][i]
+
+            if negative_mf > 0:
+                mfi = 100 - (100 / (1 + (positive_mf / negative_mf)))
+            else:
+                mfi = 100 - (100 / (1 + (positive_mf)))
+
+            mfiList.append({"type": "MFI", "DT": dfDt[0], "MFI": round(mfi, 4)})
+
+        return mfiList
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_macd
+# - Desc : MACD 조회
+# - Input
+#   1) target_item : 대상 종목
+#   2) tick_kind : 캔들 종류 (1, 3, 5, 10, 15, 30, 60, 240 - 분, D-일, W-주, M-월)
+#   3) inq_range : 캔들 조회 범위
+#   4) loop_cnt : 지표 반복계산 횟수
+# - Output
+#   1) MACD 값
+# -----------------------------------------------------------------------------
+def get_macd(target_item, tick_kind, inq_range, loop_cnt):
+    try:
+
+        # 캔들 데이터 조회용
+        candle_datas = []
+
+        # MACD 데이터 리턴용
+        macd_list = []
+
+        # 캔들 추출
+        candle_data = get_candle(target_item, tick_kind, inq_range)
+
+        # 조회 횟수별 candle 데이터 조합
+        for i in range(0, int(loop_cnt)):
+            candle_datas.append(candle_data[i : int(len(candle_data))])
+
+        df = pd.DataFrame(candle_datas[0])
+        df = df.iloc[::-1]
+        df = df["trade_price"]
+
+        # MACD 계산
+        exp1 = df.ewm(span=12, adjust=False).mean()
+        exp2 = df.ewm(span=26, adjust=False).mean()
+        macd = exp1 - exp2
+        exp3 = macd.ewm(span=9, adjust=False).mean()
+
+        for i in range(0, int(loop_cnt)):
+            macd_list.append(
+                {
+                    "type": "MACD",
+                    "DT": candle_datas[0][i]["candle_date_time_kst"],
+                    "MACD": round(macd[i], 4),
+                    "SIGNAL": round(exp3[i], 4),
+                    "OCL": round(macd[i] - exp3[i], 4),
+                }
+            )
+
+        return macd_list
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_macd
+# - Desc : MACD 조회
+# - Input
+#   1) candle_datas : 캔들 정보
+#   2) loop_cnt : 반복 횟수
+# - Output
+#   1) MACD 값
+# -----------------------------------------------------------------------------
+def get_macd(candle_datas, loop_cnt):
+    try:
+
+        # MACD 데이터 리턴용
+        macd_list = []
+
+        df = pd.DataFrame(candle_datas[0])
+        df = df.iloc[::-1]
+        df = df["trade_price"]
+
+        # MACD 계산
+        exp1 = df.ewm(span=12, adjust=False).mean()
+        exp2 = df.ewm(span=26, adjust=False).mean()
+        macd = exp1 - exp2
+        exp3 = macd.ewm(span=9, adjust=False).mean()
+
+        for i in range(0, int(loop_cnt)):
+            macd_list.append(
+                {
+                    "type": "MACD",
+                    "DT": candle_datas[0][i]["candle_date_time_kst"],
+                    "MACD": round(macd[i], 4),
+                    "SIGNAL": round(exp3[i], 4),
+                    "OCL": round(macd[i] - exp3[i], 4),
+                }
+            )
+
+        return macd_list
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_ma
+# - Desc : MA 조회
+# - Input
+#   1) candle_datas : 캔들 정보
+#   2) loop_cnt : 반복 횟수
+# - Output
+#   1) MA 값
+# -----------------------------------------------------------------------------
+def get_ma(candle_datas, loop_cnt):
+    try:
+        # MA 데이터 리턴용
+        ma_list = []
+
+        df = pd.DataFrame(candle_datas[0])
+        df = df.iloc[::-1]
+        df = df["trade_price"]
+
+        # MA 계산
+
+        ma5 = df.rolling(window=5).mean()
+        ma10 = df.rolling(window=10).mean()
+        ma20 = df.rolling(window=20).mean()
+        ma60 = df.rolling(window=60).mean()
+        ma120 = df.rolling(window=120).mean()
+
+        for i in range(0, int(loop_cnt)):
+            ma_list.append(
+                {
+                    "type": "MA",
+                    "DT": candle_datas[0][i]["candle_date_time_kst"],
+                    "MA5": ma5[i],
+                    "MA10": ma10[i],
+                    "MA20": ma20[i],
+                    "MA60": ma60[i],
+                    "MA120": ma120[i],
+                    "MA_5_10": str(Decimal(str(ma5[i])) - Decimal(str(ma10[i]))),
+                    "MA_10_20": str(Decimal(str(ma10[i])) - Decimal(str(ma20[i]))),
+                    "MA_20_60": str(Decimal(str(ma20[i])) - Decimal(str(ma60[i]))),
+                    "MA_60_120": str(Decimal(str(ma60[i])) - Decimal(str(ma120[i]))),
+                }
+            )
+
+        return ma_list
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_bb
+# - Desc : 볼린저밴드 조회
+# - Input
+#   1) target_item : 대상 종목
+#   2) tick_kind : 캔들 종류 (1, 3, 5, 10, 15, 30, 60, 240 - 분, D-일, W-주, M-월)
+#   3) inq_range : 캔들 조회 범위
+#   4) loop_cnt : 지표 반복계산 횟수
+# - Output
+#   1) 볼린저 밴드 값
+# -----------------------------------------------------------------------------
+def get_bb(target_item, tick_kind, inq_range, loop_cnt):
+    try:
+
+        # 캔들 데이터 조회용
+        candle_datas = []
+
+        # 볼린저밴드 데이터 리턴용
+        bb_list = []
+
+        # 캔들 추출
+        candle_data = get_candle(target_item, tick_kind, inq_range)
+
+        # 조회 횟수별 candle 데이터 조합
+        for i in range(0, int(loop_cnt)):
+            candle_datas.append(candle_data[i : int(len(candle_data))])
+
+        # 캔들 데이터만큼 수행
+        for candle_data_for in candle_datas:
+            df = pd.DataFrame(candle_data_for)
+            dfDt = df["candle_date_time_kst"].iloc[::-1]
+            df = df["trade_price"].iloc[::-1]
+
+            # 표준편차(곱)
+            unit = 2
+
+            band1 = unit * numpy.std(df[len(df) - 20 : len(df)])
+            bb_center = numpy.mean(df[len(df) - 20 : len(df)])
+            band_high = bb_center + band1
+            band_low = bb_center - band1
+
+            bb_list.append(
+                {
+                    "type": "BB",
+                    "DT": dfDt[0],
+                    "BBH": round(band_high, 4),
+                    "BBM": round(bb_center, 4),
+                    "BBL": round(band_low, 4),
+                }
+            )
+
+        return bb_list
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_bb
+# - Desc : 볼린저밴드 조회
+# - Input
+#   1) candle_datas : 캔들 정보
+# - Output
+#   1) 볼린저 밴드 값
+# -----------------------------------------------------------------------------
+def get_bb(candle_datas):
+    try:
+
+        # 볼린저밴드 데이터 리턴용
+        bb_list = []
+
+        # 캔들 데이터만큼 수행
+        for candle_data_for in candle_datas:
+            df = pd.DataFrame(candle_data_for)
+            dfDt = df["candle_date_time_kst"].iloc[::-1]
+            df = df["trade_price"].iloc[::-1]
+
+            # 표준편차(곱)
+            unit = 2
+
+            band1 = unit * numpy.std(df[len(df) - 20 : len(df)])
+            bb_center = numpy.mean(df[len(df) - 20 : len(df)])
+            band_high = bb_center + band1
+            band_low = bb_center - band1
+
+            bb_list.append(
+                {
+                    "type": "BB",
+                    "DT": dfDt[0],
+                    "BBH": round(band_high, 4),
+                    "BBM": round(bb_center, 4),
+                    "BBL": round(band_low, 4),
+                }
+            )
+
+        return bb_list
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_williams
+# - Desc : 윌리암스 %R 조회
+# - Input
+#   1) target_item : 대상 종목
+#   2) tick_kind : 캔들 종류 (1, 3, 5, 10, 15, 30, 60, 240 - 분, D-일, W-주, M-월)
+#   3) inq_range : 캔들 조회 범위
+#   4) loop_cnt : 지표 반복계산 횟수
+# - Output
+#   1) 윌리암스 %R 값
+# -----------------------------------------------------------------------------
+def get_williamsR(target_item, tick_kind, inq_range, loop_cnt):
+    try:
+
+        # 캔들 데이터 조회용
+        candle_datas = []
+
+        # 윌리암스R 데이터 리턴용
+        williams_list = []
+
+        # 캔들 추출
+        candle_data = get_candle(target_item, tick_kind, inq_range)
+
+        # 조회 횟수별 candle 데이터 조합
+        for i in range(0, int(loop_cnt)):
+            candle_datas.append(candle_data[i : int(len(candle_data))])
+
+        # 캔들 데이터만큼 수행
+        for candle_data_for in candle_datas:
+
+            df = pd.DataFrame(candle_data_for)
+            dfDt = df["candle_date_time_kst"].iloc[::-1]
+            df = df.iloc[:14]
+
+            # 계산식
+            # %R = (Highest High - Close)/(Highest High - Lowest Low) * -100
+            hh = numpy.max(df["high_price"])
+            ll = numpy.min(df["low_price"])
+            cp = df["trade_price"][0]
+
+            w = (hh - cp) / (hh - ll) * -100
+
+            williams_list.append(
+                {
+                    "type": "WILLIAMS",
+                    "DT": dfDt[0],
+                    "HH": round(hh, 4),
+                    "LL": round(ll, 4),
+                    "CP": round(cp, 4),
+                    "W": round(w, 4),
+                }
+            )
+
+        return williams_list
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_williams
+# - Desc : 윌리암스 %R 조회
+# - Input
+#   1) candle_datas : 캔들 정보
+# - Output
+#   1) 윌리암스 %R 값
+# -----------------------------------------------------------------------------
+def get_williams(candle_datas):
+    try:
+
+        # 윌리암스R 데이터 리턴용
+        williams_list = []
+
+        # 캔들 데이터만큼 수행
+        for candle_data_for in candle_datas:
+            df = pd.DataFrame(candle_data_for)
+            dfDt = df["candle_date_time_kst"].iloc[::-1]
+            df = df.iloc[:14]
+
+            # 계산식
+            # %R = (Highest High - Close)/(Highest High - Lowest Low) * -100
+            hh = numpy.max(df["high_price"])
+            ll = numpy.min(df["low_price"])
+            cp = df["trade_price"][0]
+
+            w = (hh - cp) / (hh - ll) * -100
+
+            williams_list.append(
+                {
+                    "type": "WILLIAMS",
+                    "DT": dfDt[0],
+                    "HH": round(hh, 4),
+                    "LL": round(ll, 4),
+                    "CP": round(cp, 4),
+                    "W": round(w, 4),
+                }
+            )
+
+        return williams_list
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_cci
+# - Desc : CCI 조회
+# - Input
+#   1) candle_data : 캔들 정보
+#   2) loop_cnt : 조회 건수
+# - Output
+#   1) CCI 값
+# -----------------------------------------------------------------------------
+def get_cci(candle_data, loop_cnt):
+    try:
+
+        # CCI 데이터 리턴용
+        cci_list = []
+
+        # 오름차순 정렬
+        df = pd.DataFrame(candle_data)
+        ordered_df = df.sort_values(by=["candle_date_time_kst"], ascending=[True])
+
+        # 계산식 : (Typical Price - Simple Moving Average) / (0.015 * Mean absolute Deviation)
+        ordered_df["TP"] = (
+            ordered_df["high_price"]
+            + ordered_df["low_price"]
+            + ordered_df["trade_price"]
+        ) / 3
+        ordered_df["SMA"] = ordered_df["TP"].rolling(window=20).mean()
+        ordered_df["MAD"] = (
+            ordered_df["TP"].rolling(window=20).apply(lambda x: pd.Series(x).mad())
+        )
+        ordered_df["CCI"] = (ordered_df["TP"] - ordered_df["SMA"]) / (
+            0.015 * ordered_df["MAD"]
+        )
+
+        # 개수만큼 조립
+        for i in range(0, loop_cnt):
+            cci_list.append(
+                {
+                    "type": "CCI",
+                    "DT": ordered_df["candle_date_time_kst"].loc[i],
+                    "CCI": round(ordered_df["CCI"].loc[i], 4),
+                }
+            )
+
+        return cci_list
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_indicators
+# - Desc : 보조지표 조회
+# - Input
+#   1) target_item : 대상 종목
+#   2) tick_kind : 캔들 종류 (1, 3, 5, 10, 15, 30, 60, 240 - 분, D-일, W-주, M-월)
+#   3) inq_range : 캔들 조회 범위
+#   4) loop_cnt : 지표 반복계산 횟수
+# - Output
+#   1) RSI
+#   2) MFI
+#   3) MACD
+#   4) BB
+#   5) WILLIAMS %R
+#   6) CCI
+# -----------------------------------------------------------------------------
+def get_indicators(target_item, tick_kind, inq_range, loop_cnt):
+    try:
+
+        # 보조지표 리턴용
+        indicator_data = []
+
+        # 캔들 데이터 조회용
+        candle_datas = []
+
+        # 캔들 추출
+        candle_data = get_candle(target_item, tick_kind, inq_range)
+
+        if len(candle_data) >= 30:
+
+            # 조회 횟수별 candle 데이터 조합
+            for i in range(0, int(loop_cnt)):
+                candle_datas.append(candle_data[i : int(len(candle_data))])
+
+            # RSI 정보 조회
+            rsi_data = get_rsi(candle_datas)
+
+            # MFI 정보 조회
+            mfi_data = get_mfi(candle_datas)
+
+            # MACD 정보 조회
+            macd_data = get_macd(candle_datas, loop_cnt)
+
+            # BB 정보 조회
+            bb_data = get_bb(candle_datas)
+
+            # WILLIAMS %R 조회
+            williams_data = get_williams(candle_datas)
+
+            # MA 정보 조회
+            ma_data = get_ma(candle_datas, loop_cnt)
+
+            # CCI 정보 조회
+            cci_data = get_cci(candle_data, loop_cnt)
+
+            if len(rsi_data) > 0:
+                indicator_data.append(rsi_data)
+
+            if len(mfi_data) > 0:
+                indicator_data.append(mfi_data)
+
+            if len(macd_data) > 0:
+                indicator_data.append(macd_data)
+
+            if len(bb_data) > 0:
+                indicator_data.append(bb_data)
+
+            if len(williams_data) > 0:
+                indicator_data.append(williams_data)
+
+            if len(ma_data) > 0:
+                indicator_data.append(ma_data)
+
+            if len(cci_data) > 0:
+                indicator_data.append(cci_data)
+
+        return indicator_data
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_indicator_sel
+# - Desc : 보조지표 조회(원하는 지표만)
+# - Input
+#   1) target_item : 대상 종목
+#   2) tick_kind : 캔들 종류 (1, 3, 5, 10, 15, 30, 60, 240 - 분, D-일, W-주, M-월)
+#   3) inq_range : 캔들 조회 범위
+#   4) loop_cnt : 지표 반복계산 횟수
+#   5) 보조지표 : 리스트
+# - Output
+#   1) 보조지표
+# -----------------------------------------------------------------------------
+def get_indicator_sel(target_item, tick_kind, inq_range, loop_cnt, indi_type):
+    try:
+
+        # 보조지표 리턴용
+        indicator_data = {}
+
+        # 캔들 데이터 조회용
+        candle_datas = []
+
+        # 캔들 추출
+        candle_data = get_candle(target_item, tick_kind, inq_range)
+
+        if len(candle_data) >= 30:
+
+            # 조회 횟수별 candle 데이터 조합
+            for i in range(0, int(loop_cnt)):
+                candle_datas.append(candle_data[i : int(len(candle_data))])
+
+            if "RSI" in indi_type:
+                # RSI 정보 조회
+                rsi_data = get_rsi(candle_datas)
+                indicator_data["RSI"] = rsi_data
+
+            if "MFI" in indi_type:
+                # MFI 정보 조회
+                mfi_data = get_mfi(candle_datas)
+                indicator_data["MFI"] = mfi_data
+
+            if "MACD" in indi_type:
+                # MACD 정보 조회
+                macd_data = get_macd(candle_datas, loop_cnt)
+                indicator_data["MACD"] = macd_data
+
+            if "BB" in indi_type:
+                # BB 정보 조회
+                bb_data = get_bb(candle_datas)
+                indicator_data["BB"] = bb_data
+
+            if "WILLIAMS" in indi_type:
+                # WILLIAMS %R 조회
+                williams_data = get_williams(candle_datas)
+                indicator_data["WILLIAMS"] = williams_data
+
+            if "MA" in indi_type:
+                # MA 정보 조회
+                ma_data = get_ma(candle_datas, loop_cnt)
+                indicator_data["MA"] = ma_data
+
+            if "CCI" in indi_type:
+                # CCI 정보 조회
+                cci_data = get_cci(candle_data, loop_cnt)
+                indicator_data["CCI"] = cci_data
+
+            if "CANDLE" in indi_type:
+                indicator_data["CANDLE"] = candle_data
+
+        return indicator_data
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_order_status
+# - Desc : 주문 조회(상태별)
+# - Input
+#   1) target_item : 대상종목
+#   2) status : 주문상태(wait : 체결 대기, watch : 예약주문 대기, done : 전체 체결 완료, cancel : 주문 취소)
+# - Output
+#   1) 주문 내역
+# -----------------------------------------------------------------------------
+def get_order_status(target_item, status):
+    try:
+
+        query = {
+            "market": target_item,
+            "state": status,
+        }
+
+        query_string = urlencode(query).encode()
+
+        m = hashlib.sha512()
+        m.update(query_string)
+        query_hash = m.hexdigest()
+
+        payload = {
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
+            "query_hash": query_hash,
+            "query_hash_alg": "SHA512",
+        }
+
+        jwt_token = jwt.encode(payload, secret_key)
+        authorize_token = "Bearer {}".format(jwt_token)
+        headers = {"Authorization": authorize_token}
+
+        res = send_request("GET", server_url + "/v1/orders", query, headers)
+        rtn_data = res.json()
+
+        return rtn_data
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : orderby_dict
+# - Desc : 딕셔너리 정렬
+# - Input
+#   1) target_dict : 정렬 대상 딕셔너리
+#   2) target_column : 정렬 대상 딕셔너리
+#   3) order_by : 정렬방식(False:오름차순, True,내림차순)
+# - Output
+#   1) 정렬된 딕서너리
+# -----------------------------------------------------------------------------
+def orderby_dict(target_dict, target_column, order_by):
+    try:
+
+        rtn_dict = sorted(
+            target_dict, key=(lambda x: x[target_column]), reverse=order_by
+        )
+
+        return rtn_dict
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : filter_dict
+# - Desc : 딕셔너리 필터링
+# - Input
+#   1) target_dict : 정렬 대상 딕셔너리
+#   2) target_column : 정렬 대상 컬럼
+#   3) filter : 필터
+# - Output
+#   1) 필터링된 딕서너리
+# -----------------------------------------------------------------------------
+def filter_dict(target_dict, target_column, filter):
+    try:
+
+        for target_dict_for in target_dict[:]:
+            if target_dict_for[target_column] != filter:
+                target_dict.remove(target_dict_for)
+
+        return target_dict
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : chg_account_to_comma
+# - Desc : 잔고 종목 리스트를 콤마리스트로 변경
+# - Input
+#   1) account_data : 잔고 데이터
+# - Output
+#   1) 종목 리스트(콤마 구분자)
+# -----------------------------------------------------------------------------
+def chg_account_to_comma(account_data):
+    try:
+
+        rtn_data = ""
+
+        for account_data_for in account_data:
+
+            if rtn_data == "":
+                rtn_data = rtn_data + account_data_for["market"]
+            else:
+                rtn_data = rtn_data + "," + account_data_for["market"]
+
+        return rtn_data
+
+    # ----------------------------------------
+    # Exception Raise
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_order_chance
+# - Desc : 주문 가능정보 조회
+# - Input
+#   1) target_item : 대상종목
+# - Output
+#   1) 주문 가능 정보
+# -----------------------------------------------------------------------------
+def get_order_chance(target_item):
+    try:
+        query = {
+            "market": target_item,
+        }
+
+        query_string = urlencode(query).encode()
+
+        m = hashlib.sha512()
+        m.update(query_string)
+        query_hash = m.hexdigest()
+
+        payload = {
+            "access_key": access_key,
+            "nonce": str(uuid.uuid4()),
+            "query_hash": query_hash,
+            "query_hash_alg": "SHA512",
+        }
+
+        jwt_token = jwt.encode(payload, secret_key)
+        authorize_token = "Bearer {}".format(jwt_token)
+        headers = {"Authorization": authorize_token}
+
+        res = send_request("GET", server_url + "/v1/orders/chance", query, headers)
+        rtn_data = res.json()
+
+        return rtn_data
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
+    # ----------------------------------------
+    except Exception:
+        raise
+
+
+# -----------------------------------------------------------------------------
+# - Name : get_max_min
+# - Desc : MAX/MIN 값 조회
+# - Input
+#   1) candle_datas : 캔들 정보
+#   2) col_name : 대상 컬럼
+# - Output
+#   1) MAX 값
+#   2) MIN 값
+# -----------------------------------------------------------------------------
+def get_max(candle_data, col_name_high, col_name_low):
+    try:
+        # MA 데이터 리턴용
+        max_min_list = []
+
+        df = pd.DataFrame(candle_data)
+        df = df.iloc[::-1]
+
+        # MAX 계산
+
+        max = numpy.max(df[col_name_high])
+        min = numpy.min(df[col_name_low])
+
+        max_min_list.append({"MAX": max, "MIN": min})
+
+        return max_min_list
+
+    # ----------------------------------------
+    # 모든 함수의 공통 부분(Exception 처리)
     # ----------------------------------------
     except Exception:
         raise

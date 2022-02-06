@@ -11,7 +11,7 @@ moaihead_token = '5272244147:AAHpcSWzIapXCNlm7yxW7Xvqs2hLRhU5UGs'
 
 # stoneheadcoding , @daegalibot
 # 머리돌 채널 ID  : -1001280712219
-stonehead_channel = '-1001280712219'
+stonehead_channel = '-1001280712219' 
 
 # 모아이 채널 ID : -1001318811692
 moaihead_channel = '-1001318811692'
