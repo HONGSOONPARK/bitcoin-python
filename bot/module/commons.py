@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 # from module import telegram_bot
 
 # keys
-access_key = ""
+access_key = "ß"
 secret_key = ""
 server_url = "https://api.upbit.com"
 
