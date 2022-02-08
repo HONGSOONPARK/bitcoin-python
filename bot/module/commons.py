@@ -15,13 +15,15 @@ import smtplib
 import sys
 import numpy
 import pandas as pd
-from datetime import datetime, timedelta
+
+
+import datetime
 
 
 # from module import telegram_bot
 
 # keys
-access_key = "ß"
+access_key = ""
 secret_key = ""
 server_url = "https://api.upbit.com"
 
@@ -42,6 +44,9 @@ min_order_amt = 5000
 
 
 def set_loglevel(level):
+
+    now = (datetime.datetime.now()).strftime("%Y%m%d%H%M%S")
+
     try:
 
         # ---------------------------------------------------------------------
@@ -49,6 +54,7 @@ def set_loglevel(level):
         # ---------------------------------------------------------------------
         if level.upper() == "D":
             logging.basicConfig(
+                filename="out_" + now + ".log",
                 format="[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d]:%(message)s",
                 datefmt="%Y/%m/%d %I:%M:%S %p",
                 level=logging.DEBUG,
@@ -59,6 +65,7 @@ def set_loglevel(level):
         # ---------------------------------------------------------------------
         elif level.upper() == "E":
             logging.basicConfig(
+                filename="out_" + now + ".log",
                 format="[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d]:%(message)s",
                 datefmt="%Y/%m/%d %I:%M:%S %p",
                 level=logging.ERROR,
@@ -74,6 +81,7 @@ def set_loglevel(level):
             # 로그레벨(DEBUG, INFO, WARNING, ERROR, CRITICAL)
             # -----------------------------------------------------------------------------
             logging.basicConfig(
+                filename="out_" + now + ".log",
                 format="[%(asctime)s][%(levelname)s][%(filename)s:%(lineno)d]:%(message)s",
                 datefmt="%Y/%m/%d %I:%M:%S %p",
                 level=logging.INFO,

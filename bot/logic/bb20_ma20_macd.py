@@ -1,6 +1,8 @@
 import sys
 import os
 
+from numpy import equal
+
 sys.path.append(os.path.dirname(os.path.abspath(os.path.dirname(__file__))))
 from module import telegram_bot
 from module import commons
@@ -8,6 +10,7 @@ import time
 import datetime
 from calendar import c
 import math
+import pandas
 
 # from module import upbit
 
@@ -16,45 +19,60 @@ import traceback
 import logging
 
 
-def get_market_price(candle):
+# 당일 20ma 값과 5일전 값을 비교했을때 양수
+# 당일 20ma 값과 10일전 값을 비교했을때 양수
+# and
+# 5와 10일 전 값과 비교햇을때 양수(뺏을때 양수)
+def check_ma20(candle, ma, ticker):
+
+    result = {}
     msg = ""
-    _date = datetime.datetime.fromisoformat(
-        (candle[0]["candle_date_time_kst"])
-    ).strftime("%Y년%m월%d일 %H시%M분")
+    today = datetime.datetime.now()
 
-    _price = math.trunc(candle[0]["trade_price"])
+    time.sleep(0.5)
+    candle_day = commons.get_candle(ticker, "D", 20)
 
-    msg += _date + "\n종목: " + candle[0]["market"] + "\n현재가: " + str(_price)
-    logging.debug(msg)
-    # print(time.strftime("%Y%m%d", candle[0]["candle_date_time_kst"]))
-    # telegram_bot.moaihead_channel_send_msg(msg)
+    # 5일전, 10일전 날짜를 구하고 금액을 변수에 저장
 
-    return _price
+    ago_5days = (today - datetime.timedelta(days=5)).strftime("%Y%m%d")
+    ago_5days_price = 0
+    ago_10days = (today - datetime.timedelta(days=10)).strftime("%Y%m%d")
+    ago_10days_price = 0
+    for i in range(0, len(candle_day)):
+        candle_date = datetime.datetime.fromisoformat(
+            (candle_day[i]["candle_date_time_kst"])
+        ).strftime("%Y%m%d")
 
+        if ago_5days == candle_date:
+            ago_5days_price = candle_day[i]["trade_price"]
 
-def check_ma20(candle, ma):
-    candle_sum = 0
-    candle26_avr = 0
-    count = 26
+        if ago_10days == candle_date:
+            ago_10days_price = candle_day[i]["trade_price"]
 
-    for i in range(0, int(count - 1)):
-        candle_sum += ma[i]["MA20"]
+    # 현재가격
+    trade_price = candle[0]["trade_price"]
 
-    candle26_avr = math.trunc(candle_sum / (count))
-    currunt_price = get_market_price(candle)
+    # 현재 MA20 가격
+    ma20_price = ma[0]["MA20"]
 
-    # 현재가 - 20일 이동평균선(26개 캔들의 평균) > 0
-    per = round(((currunt_price - candle26_avr) * 100) / candle26_avr, 1)
-    print(per)
-    # per 가 1 이상이면 평행, 우상향으로 판단
+    msg += "\n5일전 가격 : " + str(ago_5days_price)
+    msg += "\n10일전 가격 : " + str(ago_10days_price)
+    msg += "\n20이평선 가격 " + str(ma20_price)
 
+    result["msg"] = msg
 
-def check_macd(candle, macd):
-    print(macd[0]["OCL"])
+    if (
+        ago_5days_price - ma20_price > 0
+        and ago_10days_price - ma20_price > 0
+        and ago_5days_price - trade_price > 0
+        and ago_10days_price - trade_price > 0
+    ):
+        result["result"] = True
+        return result
 
-
-def check_bb(candle, bb):
-    print(bb[0]["BBH"])
+    else:
+        result["result"] = False
+        return result
 
 
 # -----------------------------------------------------------------------------
@@ -66,13 +84,14 @@ def check_bb(candle, bb):
 # -----------------------------------------------------------------------------
 def check_logic():
 
+    ticker = "KRW-BTC"
+
     while True:
-
-        time.sleep(1.5)
-
-        # 3분봉 캔들 200
+        # 봇 메세지
+        msg = ""
+        # Call 3분봉 캔들 200
         indicators = commons.get_indicator_sel(
-            "KRW-BTC", "3", 200, 26, ["MACD", "MA", "BB", "CANDLE"]
+            ticker, "3", 200, 26, ["MACD", "MA", "BB", "CANDLE"]
         )
 
         # 보조지표 추출
@@ -81,43 +100,20 @@ def check_logic():
         macd = indicators["MACD"]
         bb = indicators["BB"]
 
-        # check_ma20(candle, ma)
-        # check_macd(candle, macd)
-        # check_bb(candle, bb)
-
-        # logging.info(candle)
-        # logging.info(ma)
-        # logging.info(macd)
-        # logging.info(bb)
-
-        # 봇 메세지
-        msg = ""
-        _date = datetime.datetime.fromisoformat(
-            (candle[0]["candle_date_time_kst"])
-        ).strftime("%Y년%m월%d일 %H시%M분")
+        now = (datetime.datetime.now()).strftime("%Y년%m월%d일 %H시%M분%S초")
 
         # 현재가
         currunt_price = round(candle[0]["trade_price"], 5)
 
-        msg += _date + "\n종목: " + candle[0]["market"] + "\n현재가: " + str(currunt_price)
+        msg += (
+            "\n" + now + "\n종목: " + candle[0]["market"] + "\n현재가: " + str(currunt_price)
+        )
         # logging.debug(msg)
 
-        # 캔들 현재값 합
-        candle_sum = 0
-        # 캔들 26개의 평균
-        candle26_avr = 0
+        ma20_result = check_ma20(candle, ma, ticker)
 
-        count = 26
+        msg += ma20_result["msg"]
 
-        for i in range(0, int(count - 1)):
-            candle_sum += ma[i]["MA20"]
-
-        candle26_avr = round(candle_sum / count, 5)
-        logging.info(currunt_price)
-
-        # 현재가 - 20일 이동평균선(26개 캔들의 평균) > 0,
-        per = round(((currunt_price - candle26_avr) * 100) / candle26_avr, 1)
-        msg += "\n20일선과 현재값 차이: " + str(per)
         msg += "\nMACD OCL: " + str(macd[0]["OCL"])
         msg += "\nBBH: " + str(bb[0]["BBH"])
 
@@ -125,13 +121,24 @@ def check_logic():
         # ocl > 0 true
         # 현재가가 bb 상단 뚫었을때 true
 
-        if per > 1 and macd[0]["OCL"] > 0 and bb[0]["BBH"] < currunt_price:
-            msg += "\n조건: 참 ====> 매수로직 실행"
-            telegram_bot.moaihead_channel_send_msg(msg)
-        else:
-            msg += "\n조건: 만족하지 않음"
+        if (
+            ma20_result["result"]
+            and macd[0]["OCL"] > 0
+            and bb[0]["BBH"] < currunt_price
+        ):
 
-        logging.debug(msg)
+            msg += "\n================="
+            msg += "\n조건: 참 ====> 매수로직 실행"
+            msg += "\n================="
+            telegram_bot.stonehead_channel_send_msg(msg)
+        else:
+            msg += "\n================="
+            msg += "\n조건: 만족하지 않음"
+            msg += "\n================="
+
+        logging.info(msg)
+        # 10초 딜레이
+        time.sleep(10.0)
 
 
 # -----------------------------------------------------------------------------
@@ -142,6 +149,7 @@ if __name__ == "__main__":
     try:
         commons.set_loglevel("D")
         check_logic()
+
         # items = commons.get_items("KRW", "")
         # logging.info(items)
         # time.sleep(1.5)
@@ -150,25 +158,6 @@ if __name__ == "__main__":
         #     if index % 10 == 0:
         #         time.sleep(1.5)
         #         logging.info("api 호출 딜레이..")
-
-        #     print(data["market"], index)
-
-        # 3분봉 캔들 200
-        # indicators = commons.get_indicator_sel(
-        #     "KRW-BTC", "3", 200, 26, ["MACD", "MA", "BB", "CANDLE"]
-        # )
-
-        # # 보조지표 추출
-        # candle = indicators["CANDLE"]
-        # ma = indicators["MA"]
-        # macd = indicators["MACD"]
-        # bb = indicators["BB"]
-
-        # # get_market_price(candle)
-        # logging.info(candle)
-        # logging.info(ma)
-        # logging.info(macd)
-        # logging.info(bb)
 
     except KeyboardInterrupt as e:
         print("KeyboardInterrupt Exception.", e)
