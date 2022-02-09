@@ -156,6 +156,7 @@ def send_request(reqType, reqUrl, reqParam, reqHeader):
             # 요청 가능회수 초과 에러 발생시에는 다시 요청
             logging.info("[restRequest] 요청 재처리중...")
 
+        logging.info(response.headers["Remaining-Req"])
         return response
 
     # ----------------------------------------

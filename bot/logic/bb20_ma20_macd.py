@@ -75,6 +75,48 @@ def check_ma20(candle, ma, ticker):
         return result
 
 
+# 당일 20ma 값과 5일전 값을 비교했을때 양수
+# 당일 20ma 값과 10일전 값을 비교했을때 양수
+# and
+# 5와 10일 전 값과 비교햇을때 양수(뺏을때 양수)
+def check_ma20_v2(ticker):
+
+    result = {}
+    msg = ""
+    today = datetime.datetime.now()
+
+    time.sleep(0.5)
+
+    # Call 일봉 캔들 200
+    indicators = commons.get_indicator_sel(ticker, "D", 200, 26, ["MA", "CANDLE"])
+
+    # 일봉 보조지표 추출
+    candle = indicators["CANDLE"]
+    ma = indicators["MA"]
+
+    # 현재가격
+    trade_price = candle[0]["trade_price"]
+
+    # 현재 MA20 가격
+    ma20_price = ma[0]["MA20"]
+    ma20_5ago = ma[5]["MA20"]
+    ma20_10ago = ma[10]["MA20"]
+
+    msg += "\n금일 MA20 " + str(ma20_price)
+    msg += "\n5일전 MA20 " + str(ma20_5ago)
+    msg += "\n10일전 MA20 " + str(ma20_10ago)
+
+    result["msg"] = msg
+
+    if ma20_price - ma20_5ago > 0 and ma20_price - ma20_10ago > 0:
+        result["result"] = True
+        return result
+
+    else:
+        result["result"] = False
+        return result
+
+
 # -----------------------------------------------------------------------------
 # - Name : check_logic
 # - Desc : 3분, 캔들 26개 기준, ma20, bb20, macd 확인
@@ -110,19 +152,17 @@ def check_logic():
         )
         # logging.debug(msg)
 
-        ma20_result = check_ma20(candle, ma, ticker)
+        ma20_result = check_ma20_v2(ticker)
 
         msg += ma20_result["msg"]
-
+        msg += "\nMA 검증 결과: " + str(ma20_result["result"])
         msg += "\nMACD OCL: " + str(macd[0]["OCL"])
         msg += "\nBBH: " + str(bb[0]["BBH"])
 
-        # per > 1 true
         # ocl > 0 true
         # 현재가가 bb 상단 뚫었을때 true
-
         if (
-            ma20_result["result"]
+            ma20_result["result"] == True
             and macd[0]["OCL"] > 0
             and bb[0]["BBH"] < currunt_price
         ):
@@ -149,6 +189,7 @@ if __name__ == "__main__":
     try:
         commons.set_loglevel("D")
         check_logic()
+        # check_ma20_v2("KRW-BTC")
 
         # items = commons.get_items("KRW", "")
         # logging.info(items)
